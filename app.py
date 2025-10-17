@@ -9,7 +9,12 @@ app = Flask(__name__)
 
 # Google Sheets setup
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
-creds = Credentials.from_service_account_file("creds/service_account.json", scopes=SCOPES)
+
+import json, os
+from google.oauth2.service_account import Credentials
+
+service_account_info = json.loads(os.environ["GOOGLE_CREDENTIALS"])
+creds = Credentials.from_service_account_info(service_account_info, scopes=SCOPE)
 client = gspread.authorize(creds)
 sheet = client.open("Goodwill Raffles Log").sheet1
 
