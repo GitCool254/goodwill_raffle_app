@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Goodwillstores Raffle Generator</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f5f7fa;
+      text-align: center;
+      padding: 40px;
+    }
+    h2 {
+      color: #1d72b8;
+      margin-bottom: 10px;
+    }
+    form {
+      background: white;
+      display: inline-block;
+      padding: 25px 40px;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      text-align: left;
+      max-width: 350px;
+    }
+    label {
+      font-weight: bold;
+      display: block;
+      margin-top: 12px;
+    }
+    input {
+      width: 100%;
+      padding: 8px;
+      margin-top: 5px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+    }
+    button {
+      margin-top: 20px;
+      width: 100%;
+      background: #1d72b8;
+      color: white;
+      padding: 10px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 16px;
+    }
+    button:hover {
+      background: #155d8a;
+    }
+  </style>
+</head>
+<body>
+  <h2>🎟️ Goodwillstores Lucrative Raffles</h2>
+  <p>Fill out the form below to generate your raffle ticket</p>
+
+  <form action="/generate" method="post">
+    <label>Full Name:</label>
+    <input type="text" name="full_name" required>
+
+    <label>Ticket Price:</label>
+    <input type="text" name="ticket_price" required>
+
+    <label>Event Place:</label>
+    <input type="text" name="event_place" required>
+
+    <label>Event Date:</label>
+    <input type="text" name="event_date" placeholder="e.g. 28/09/2026" required>
+
+    <button type="submit">Generate Ticket</button>
+  </form>
+</body>
+</html>
