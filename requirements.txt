@@ -1,1 +1,7 @@
-Flask\npymupdf\nreportlab\nqrcode\npillow\ngspread\ngoogle-auth
+Flask
+PyMuPDF
+reportlab
+qrcode
+pillow
+gspread
+google-auth
