@@ -5,3 +5,4 @@ qrcode
 pillow
 gspread
 google-auth
+PyPDF2
