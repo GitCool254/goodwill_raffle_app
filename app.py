@@ -1,113 +1,85 @@
-import os
+from flask import Flask, render_template_string, request, send_file
+import fitz  # PyMuPDF
 import io
-from datetime import datetime
-from flask import Flask, render_template, request, send_file
 import qrcode
-from reportlab.pdfgen import canvas
-from reportlab.lib.pagesizes import letter
-from reportlab.lib.units import mm
-from reportlab.lib.utils import ImageReader
-from PyPDF2 import PdfReader, PdfWriter
 import gspread
 from google.oauth2.service_account import Credentials
 
-# ---------------- CONFIG ----------------
-TEMPLATE_PATH = "templates/goodwill_raffle_template.pdf"
-OUTPUT_DIR = "output"
-SERVICE_ACCOUNT_FILE = "creds/service_account.json"
-SHEET_NAME = "Goodwill Raffle Logs"
-
-os.makedirs(OUTPUT_DIR, exist_ok=True)
-
-# ------------- GOOGLE SHEETS -------------
-def get_sheets_client():
-    scopes = [
-        "https://www.googleapis.com/auth/spreadsheets",
-        "https://www.googleapis.com/auth/drive"
-    ]
-    creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=scopes)
-    return gspread.authorize(creds)
-
-def log_to_sheets(ticket_no, full_name, ticket_price, event_place, event_date):
-    try:
-        client = get_sheets_client()
-        sheet = client.open(SHEET_NAME).sheet1
-        sheet.append_row([
-            datetime.utcnow().isoformat(),
-            ticket_no, full_name, ticket_price, event_place, event_date
-        ])
-    except Exception as e:
-        print("Google Sheets logging failed:", e)
-
-# --------------- HELPERS ----------------
-def replace_placeholders(template_path, replacements, output_path):
-    reader = PdfReader(template_path)
-    writer = PdfWriter()
-    page = reader.pages[0]
-
-    # Create overlay PDF for replacements
-    packet = io.BytesIO()
-    c = canvas.Canvas(packet, pagesize=letter)
-
-    # Coordinates tuned for your layout
-    # Adjusted coordinates for perfect fit
-    c.setFont("Helvetica-Bold", 12)
-    c.drawCentredString(105*mm, 100*mm, replacements["TICKET_NO"])  # Move up slightly
-
-    c.setFont("Helvetica", 10)
-    c.drawString(60*mm, 73*mm, replacements["FULL_NAME"])     # Full Name
-    c.drawString(60*mm, 67*mm, replacements["TICKET_PRICE"])  # Ticket Price
-    c.drawString(60*mm, 61*mm, replacements["EVENT_PLACE"])   # Event Place
-    c.drawString(60*mm, 55*mm, replacements["EVENT_DATE"])    # Event Date
-
-    # QR bottom-right aligned
-    qr = qrcode.make(replacements["QR_TEXT"])
-    qr_buffer = io.BytesIO()
-    qr.save(qr_buffer, format="PNG")
-    qr_buffer.seek(0)
-    c.drawImage(ImageReader(qr_buffer), 165*mm, 38*mm, width=20*mm, height=20*mm)
-
-    c.save()
-    packet.seek(0)
-
-    overlay = PdfReader(packet)
-    page.merge_page(overlay.pages[0])
-    writer.add_page(page)
-
-    with open(output_path, "wb") as f:
-        writer.write(f)
-
-# --------------- FLASK APP ----------------
 app = Flask(__name__)
 
-@app.route("/")
-def home():
-    return render_template("index.html")
+# Google Sheets setup
+SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
+creds = Credentials.from_service_account_file("creds/service_account.json", scopes=SCOPES)
+client = gspread.authorize(creds)
+sheet = client.open("Goodwill Raffles Log").sheet1
 
-@app.route("/generate", methods=["POST"])
-def generate():
-    full_name = request.form["full_name"]
-    ticket_price = request.form["ticket_price"]
-    event_place = request.form["event_place"]
-    event_date = request.form["event_date"]
+# HTML form
+form_html = """
+<!DOCTYPE html>
+<html>
+<head><title>Goodwillstores Raffle Ticket Generator</title></head>
+<body>
+  <h2>Goodwillstores Raffle Ticket Generator</h2>
+  <form method="POST">
+    Full Name: <input name="fullname" required><br>
+    Ticket Price: <input name="price" required><br>
+    Event Place: <input name="place" required><br>
+    Event Date: <input name="date" required><br>
+    <button type="submit">Generate Ticket</button>
+  </form>
+</body>
+</html>
+"""
 
-    ticket_no = f"GWS-{int(datetime.utcnow().timestamp())}"
-    qr_text = f"Goodwillstores@{full_name}-{ticket_no}"
+@app.route("/", methods=["GET", "POST"])
+def index():
+    if request.method == "POST":
+        fullname = request.form["fullname"]
+        price = request.form["price"]
+        place = request.form["place"]
+        date = request.form["date"]
 
-    replacements = {
-        "TICKET_NO": ticket_no,
-        "FULL_NAME": full_name,
-        "TICKET_PRICE": ticket_price,
-        "EVENT_PLACE": event_place,
-        "EVENT_DATE": event_date,
-        "QR_TEXT": qr_text
-    }
+        # Generate QR code (Goodwillstores@Full name - Ticket number)
+        ticket_no = f"GWS-{sheet.row_count + 1:04}"
+        qr_data = f"Goodwillstores@{fullname}-{ticket_no}"
+        qr_img = qrcode.make(qr_data)
+        qr_bytes = io.BytesIO()
+        qr_img.save(qr_bytes, format="PNG")
+        qr_bytes.seek(0)
 
-    output_path = os.path.join(OUTPUT_DIR, f"{ticket_no}.pdf")
-    replace_placeholders(TEMPLATE_PATH, replacements, output_path)
-    log_to_sheets(ticket_no, full_name, ticket_price, event_place, event_date)
+        # Load PDF template
+        template = fitz.open("goodwill_raffle_template.pdf")
+        page = template[0]
 
-    return send_file(output_path, as_attachment=True)
+        # --- Smart placeholder replacement ---
+        replacements = {
+            "{{FULL_NAME}}": fullname,
+            "{{TICKET_NO}}": ticket_no,
+            "{{TICKET_PRICE}}": price,
+            "{{EVENT_PLACE}}": place,
+            "{{EVENT_DATE}}": date
+        }
+
+        for key, value in replacements.items():
+            for inst in page.search_for(key):
+                page.insert_text((inst.x0, inst.y1), value, fontsize=11, color=(0, 0, 0))
+
+        # --- Insert QR bottom right ---
+        rect = fitz.Rect(420, 620, 500, 700)
+        page.insert_image(rect, stream=qr_bytes)
+
+        # Save PDF
+        output_pdf = io.BytesIO()
+        template.save(output_pdf)
+        output_pdf.seek(0)
+
+        # Log to Google Sheets
+        sheet.append_row([ticket_no, fullname, price, place, date])
+
+        # Return generated ticket
+        return send_file(output_pdf, as_attachment=True, download_name=f"{ticket_no}.pdf")
+
+    return render_template_string(form_html)
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
