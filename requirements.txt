@@ -1,0 +1,1 @@
+Flask\npymupdf\nreportlab\nqrcode\npillow\ngspread\ngoogle-auth
