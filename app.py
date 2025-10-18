@@ -61,11 +61,11 @@ def index():
 
         # --- Replace placeholders with actual form data ---
         replacements = {
-            "{{FULL_NAME}}": fullname,
-            "{{TICKET_PRICE}}": price,
-            "{{EVENT_PLACE}}": place,
-            "{{EVENT_DATE}}": date,
-            "{{TICKET_NO}}": ticket_no
+            "Full Name:": f"Full Name: {fullname}",
+            "Ticket Price:": f"Ticket Price: {price}",
+            "Event Place:": f"Event Place: {place}",
+            "Event Date:": f"Event Date: {date}",
+            "Ticket No:": f"Ticket No: {ticket_no}"
         }
 
         for placeholder, value in replacements.items():
