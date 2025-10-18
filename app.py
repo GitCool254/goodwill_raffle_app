@@ -44,20 +44,23 @@ def index():
         place = request.form["place"]
         date = request.form["date"]
 
-        # Generate QR code (Goodwillstores@Full name - Ticket number)
+        # Generate unique ticket number and QR data
         ticket_no = f"GWS-{int(__import__('time').time())}"
         qr_data = f"Goodwillstores@{fullname} - {ticket_no}"
+
+        # --- Generate QR code ---
         qr_img = qrcode.make(qr_data)
         qr_bytes = io.BytesIO()
         qr_img.save(qr_bytes, format="PNG")
         qr_bytes.seek(0)
 
-        # Load PDF template
-        template = fitz.open("templates/goodwill_raffle_template.pdf")
-        page = template[0]
+        # --- Open PDF template ---
+        template_path = "templates/goodwill_raffle_template.pdf"
+        doc = fitz.open(template_path)
+        page = doc[0]
 
-        # Replace placeholders with actual values
-        placeholders = {
+        # --- Replace placeholders with actual form data ---
+        replacements = {
             "{{FULL_NAME}}": fullname,
             "{{TICKET_PRICE}}": price,
             "{{EVENT_PLACE}}": place,
@@ -65,21 +68,29 @@ def index():
             "{{TICKET_NO}}": ticket_no
         }
 
-        for key, value in placeholders.items():
-            for inst in page.search_for(key):
+        for placeholder, value in replacements.items():
+            for inst in page.search_for(placeholder):
+                # Remove old placeholder text
                 page.add_redact_annot(inst)
                 page.apply_redactions()
-                page.insert_text((inst.x0, inst.y0), value, fontsize=12, fontname="helv", fill=(0, 0, 0))
+                # Write the new text in its place
+                page.insert_text(
+                    (inst.x0, inst.y0),
+                    value,
+                    fontsize=12,
+                    fontname="helv",
+                    fill=(0, 0, 0)
+                )
 
-        # Insert QR bottom right
-        rect = fitz.Rect(420, 620, 500, 700)
-        page.insert_image(rect, stream=qr_bytes)
+        # --- Add QR code image ---
+        qr_rect = fitz.Rect(420, 620, 500, 700)
+        page.insert_image(qr_rect, stream=qr_bytes)
 
-        # Save PDF to output folder
+        # --- Save final ticket to memory and return download ---
         output_pdf = io.BytesIO()
-        template.save(output_pdf)
+        doc.save(output_pdf)
         output_pdf.seek(0)
-        template.close()
+        doc.close()
 
         return send_file(output_pdf, as_attachment=True, download_name=f"raffle_{fullname}.pdf")
 
