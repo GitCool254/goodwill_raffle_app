@@ -53,7 +53,7 @@ def index():
         qr_bytes.seek(0)
 
         # Load PDF template
-        template = fitz.open("goodwill_raffle_template.pdf")
+        template = fitz.open("templates/goodwill_raffle_template.pdf")
         page = template[0]
 
         # --- Smart placeholder replacement ---
