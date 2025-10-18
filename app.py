@@ -45,8 +45,8 @@ def index():
         date = request.form["date"]
 
         # Generate QR code (Goodwillstores@Full name - Ticket number)
-        ticket_no = f"GWS-{sheet.row_count + 1:04}"
-        qr_data = f"Goodwillstores@{fullname}-{ticket_no}"
+        ticket_no = f"GWS-{int(__import__('time').time())}"
+        qr_data = f"Goodwillstores@{fullname} - {ticket_no}"
         qr_img = qrcode.make(qr_data)
         qr_bytes = io.BytesIO()
         qr_img.save(qr_bytes, format="PNG")
@@ -56,33 +56,32 @@ def index():
         template = fitz.open("templates/goodwill_raffle_template.pdf")
         page = template[0]
 
-        # --- Smart placeholder replacement ---
-        replacements = {
+        # Replace placeholders with actual values
+        placeholders = {
             "{{FULL_NAME}}": fullname,
-            "{{TICKET_NO}}": ticket_no,
             "{{TICKET_PRICE}}": price,
             "{{EVENT_PLACE}}": place,
-            "{{EVENT_DATE}}": date
+            "{{EVENT_DATE}}": date,
+            "{{TICKET_NO}}": ticket_no
         }
 
-        for key, value in replacements.items():
+        for key, value in placeholders.items():
             for inst in page.search_for(key):
-                page.insert_text((inst.x0, inst.y1), value, fontsize=11, color=(0, 0, 0))
+                page.add_redact_annot(inst)
+                page.apply_redactions()
+                page.insert_text((inst.x0, inst.y0), value, fontsize=12, fontname="helv", fill=(0, 0, 0))
 
-        # --- Insert QR bottom right ---
+        # Insert QR bottom right
         rect = fitz.Rect(420, 620, 500, 700)
         page.insert_image(rect, stream=qr_bytes)
 
-        # Save PDF
+        # Save PDF to output folder
         output_pdf = io.BytesIO()
         template.save(output_pdf)
         output_pdf.seek(0)
+        template.close()
 
-        # Log to Google Sheets
-        sheet.append_row([ticket_no, fullname, price, place, date])
-
-        # Return generated ticket
-        return send_file(output_pdf, as_attachment=True, download_name=f"{ticket_no}.pdf")
+        return send_file(output_pdf, as_attachment=True, download_name=f"raffle_{fullname}.pdf")
 
     return render_template_string(form_html)
 
