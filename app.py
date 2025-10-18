@@ -68,23 +68,58 @@ def index():
             "Ticket No:": f"Ticket No: {ticket_no}"
         }
 
-        for placeholder, value in replacements.items():
-            for inst in page.search_for(placeholder):
-                # Remove old placeholder text
-                page.add_redact_annot(inst)
-                page.apply_redactions()
-                # Write the new text in its place
-                page.insert_text(
-                    (inst.x0, inst.y0),
-                    value,
-                    fontsize=12,
-                    fontname="helv",
-                    fill=(0, 0, 0)
-                )
+        # smarter placement: wrap & auto-shrink to fit the area to the right of each label
+from math import floor
 
-        # --- Add QR code image ---
-        qr_rect = fitz.Rect(420, 620, 500, 700)
-        page.insert_image(qr_rect, stream=qr_bytes)
+page_rect = page.rect  # full page rect
+right_margin = 20  # points from the right edge; tune if needed
+
+for label, value in label_mapping.items():
+    matches = page.search_for(label)
+    for inst in matches:
+        # define box starting a few points right of the label up to the page right margin
+        x0 = inst.x1 + 4            # start just after label
+        y0 = inst.y0 - 1            # small vertical tweak (top)
+        x1 = page_rect.width - right_margin
+        y1 = inst.y1 + 1            # small vertical tweak (bottom)
+        box = fitz.Rect(x0, y0, x1, y1)
+
+        # initial font size: use box height * 0.8 (heuristic), cap at 14
+        initial_fs = max(6, min(14, int(box.height * 0.8)))
+        fs = initial_fs
+
+        # try insert_textbox and shrink until it fits within box height (max lines)
+        # We'll allow up to 2 lines by default (increase as needed)
+        max_lines_allowed = 2
+        while fs >= 6:
+            # draw into a temporary page copy so we can test whether text fits
+            # simpler: try insert_textbox; if it obviously overflows visually you'll see; but we try to avoid too many iterations
+            page.insert_textbox(box, value, fontsize=fs, fontname="helv", align=0)  # left align
+            # To check fit: measure height taken roughly by lines = ceil(text_width/box.width) * line_height
+            # We can approximate: line_height ≈ fs * 1.2
+            # Use page.get_text_length if available for exact width, else approximate
+            try:
+                text_width = page.get_text_length(value, fontsize=fs, fontname="helv")
+            except Exception:
+                # fallback estimation using average char width
+                avg_char_width = fs * 0.5
+                text_width = len(value) * avg_char_width
+
+            lines_needed = max(1, int((text_width / box.width) + 0.999))
+            est_height = lines_needed * (fs * 1.2)
+            if lines_needed <= max_lines_allowed and est_height <= box.height:
+                # fits — done
+                break
+            # else: it doesn't fit — remove the previously drawn text and shrink font, then retry
+            # remove by redaction of the box area (clean) then apply
+            page.add_redact_annot(box)
+            page.apply_redactions()
+            fs -= 1
+
+        # final pass: draw with the last fs (if fs<6, will still draw with 6)
+        if fs < 6:
+            fs = 6
+        page.insert_textbox(box, value, fontsize=fs, fontname="helv", align=0)
 
         # --- Save final ticket to memory and return download ---
         output_pdf = io.BytesIO()
